@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Expo / generated native projects
+.expo/
+.expo-shared/
+/dist/
+/android/
+/ios/
+web-build/
+coverage/
+
+# Local environment and signing credentials
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+credentials.json
+
+# Build artifacts and diagnostics
+/releases/
+*.apk
+*.aab
+*.log
+/docs/v2-expo-config.json
+*.tsbuildinfo
+.gradle/
+.cxx/
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

@@ -1,0 +1,14 @@
+gradle.beforeProject { project ->
+    if (project != project.rootProject && project.rootDir.absolutePath.contains('nightwave-build-01a1e54b')) {
+        def folder = project.path.replace(':', '_')
+        project.layout.buildDirectory.set(new File('D:/nightwave-build-01a1e54b/android/outputs-retry3', folder))
+        project.afterEvaluate {
+            def android = project.extensions.findByName('android')
+            if (android != null) {
+                android.defaultConfig.externalNativeBuild.cmake.arguments.add('-DCMAKE_OBJECT_PATH_MAX=1024')
+                android.defaultConfig.externalNativeBuild.cmake.arguments.add('-DCMAKE_MAKE_PROGRAM=D:/nightwave-build-01a1e54b/tools/ninja/ninja.exe')
+                android.externalNativeBuild.cmake.buildStagingDirectory = new File('D:/nightwave-build-01a1e54b/android/cxx', folder)
+            }
+        }
+    }
+}

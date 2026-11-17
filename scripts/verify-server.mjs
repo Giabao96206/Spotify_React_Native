@@ -1,0 +1,16 @@
+import fs from 'node:fs/promises';
+import ts from 'typescript';
+import assert from 'node:assert/strict';
+let stored = 'http://192.168.1.2:5555';
+globalThis.__storage = { getItem: async () => stored, setItem: async (_, value) => { stored = value; } };
+const source = (await fs.readFile('src/services/api/server.ts', 'utf8')).replace(/import AsyncStorage from [^;]+;/, 'const AsyncStorage = globalThis.__storage;');
+const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText;
+const server = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'));
+assert.equal(await server.getServerUrl(), 'http://192.168.1.2:5555');
+await server.saveServerUrl(' http://192.168.0.45:5555/ ');
+assert.equal(await server.getServerUrl(), 'http://192.168.0.45:5555');
+assert.equal(stored, 'http://192.168.0.45:5555');
+assert.throws(() => server.normalizeServerUrl('file:///tmp'));
+assert.throws(() => server.normalizeServerUrl('http://user:secret@host:5555'));
+assert.throws(() => server.normalizeServerUrl('http://host:5555/api'));
+console.log('PASS: saved LAN restore/change, trailing slash normalization, invalid URL rejection.');
