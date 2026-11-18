@@ -1,14 +1,14 @@
 export const colors = {
-  ink: "#080808",
+  ink: "#101010",
   panel: "#111111",
   surface: "#1A1A1A",
-  elevated: "#242424",
+  elevated: "#2A2A2A",
   green: "#1DB954",
   mint: "#A9FFB8",
   coral: "#FF7F6E",
   white: "#F6F7F4",
-  muted: "#A9AAA8",
-  dim: "#6D706E",
+  muted: "#B3B3B3",
+  dim: "#939593",
   line: "#2B2D2C",
   glow: "#143C2A",
 } as const;

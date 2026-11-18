@@ -6,6 +6,7 @@ import {
 import { api } from "@/services/api/client";
 import { usePlayerStore } from "@/stores/player";
 import { Track } from "@/types/music";
+import { originIsland } from "../../../modules/origin-island";
 class AudioEngine {
   private player: AudioPlaylist | null = null;
   private cancel?: AbortController;
@@ -83,6 +84,10 @@ class AudioEngine {
     const unsubscribe = usePlayerStore.subscribe((s, previous) => {
       if (this.syncing || !usePlayerStore.persist.hasHydrated()) return;
       if (s.current !== previous.current) {
+        if (!s.current) {
+          this.stop();
+          return;
+        }
         const index = this.tracks.findIndex((t) => t.id === s.current?.id);
         if (this.ready && index >= 0) {
           player.skipTo(index);
@@ -115,6 +120,7 @@ class AudioEngine {
       player.clearLockScreenControls();
       player.destroy();
       this.player = null;
+      originIsland.clearQueueMetadata();
       this.mediaActive = false;
       this.ready = false;
     };
@@ -149,6 +155,8 @@ class AudioEngine {
   private fail(error: unknown) {
     this.player?.pause();
     this.ready = false;
+    this.player?.clearLockScreenControls();
+    this.mediaActive = false;
     clearTimeout(this.watchdog);
     this.watchdog = undefined;
     usePlayerStore.setState({
@@ -219,6 +227,14 @@ class AudioEngine {
       if (!this.tracks.length)
         throw new Error("No playable streams were returned.");
       this.player.clear();
+      originIsland.setQueueMetadata(
+        this.tracks.map((track) => ({
+          title: track.title,
+          artist: track.artist,
+          albumTitle: track.album,
+          artworkUrl: track.artwork || null,
+        })),
+      );
       this.tracks.forEach((t) =>
         this.player!.add({ uri: urls.get(t.id)!, name: t.title }),
       );
@@ -238,9 +254,7 @@ class AudioEngine {
     const s = usePlayerStore.getState();
     if (!this.player) return;
     if (s.status === "loading") {
-      this.cancel?.abort();
-      this.sequence++;
-      this.player.pause();
+      this.stop();
       usePlayerStore.setState({ status: "paused", isPlaying: false });
       return;
     }
@@ -251,6 +265,25 @@ class AudioEngine {
       if (s.status === "ended") void this.player.seekTo(0);
       this.player.play();
     }
+  };
+  stop = () => {
+    this.sequence++;
+    this.cancel?.abort();
+    this.ready = false;
+    clearTimeout(this.watchdog);
+    this.watchdog = undefined;
+    this.player?.pause();
+    this.player?.clearLockScreenControls();
+    this.player?.clear();
+    this.tracks = [];
+    this.mediaActive = false;
+    originIsland.clearQueueMetadata();
+    usePlayerStore.setState({
+      isPlaying: false,
+      status: "idle",
+      position: 0,
+      duration: 0,
+    });
   };
   seek = async (seconds: number) => {
     try {

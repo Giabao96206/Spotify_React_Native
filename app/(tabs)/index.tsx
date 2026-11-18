@@ -1,39 +1,33 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import {
-  ActivityIndicator,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { Image } from "expo-image";
 import { router } from "expo-router";
-import {
-  Bell,
-  ChevronRight,
-  Heart,
-  Play,
-  SlidersHorizontal,
-} from "lucide-react-native";
+import { Music2 } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/api/client";
 import { usePlayerStore } from "@/stores/player";
-import { colors, radii, spacing } from "@/theme/tokens";
+import { colors } from "@/theme/tokens";
 import { Track } from "@/types/music";
-import { TrackRow } from "@/components/music/TrackRow";
+import { TrackRow, showActions } from "@/components/music/TrackRow";
 import { Skeleton } from "@/components/animations/Skeleton";
-import { MusicCapsule } from "@/components/music/MusicCapsule";
-import { MiniPlayer } from "@/components/music/MiniPlayer";
 
+type Filter = "Tất cả" | "Bài hát" | "Playlist";
 export default function Home() {
-  const [tab, setTab] = useState("home");
+  const [filter, setFilter] = useState<Filter>("Tất cả");
   const [refreshing, setRefreshing] = useState(false);
   const current = usePlayerStore((s) => s.current);
-  const setCurrent = usePlayerStore((s) => s.setCurrent);
-  const enqueue = usePlayerStore((s) => s.enqueue);
-  const query = useQuery({
+  const recent = usePlayerStore((s) => s.recent);
+  const { width } = useWindowDimensions();
+  const cardWidth = Math.min(180, Math.max(144, width * 0.42));
+  const home = useQuery({
     queryKey: ["home"],
     queryFn: ({ signal }) => api.home(signal),
     retry: 1,
@@ -43,27 +37,63 @@ export default function Home() {
     queryFn: ({ signal }) => api.trending(signal),
     retry: 1,
   });
-  const tracks = useMemo(
-    () =>
-      query.data?.tracks.length
-        ? query.data.tracks
-        : trending.data?.tracks || [],
-    [query.data, trending.data],
-  );
-
-  const play = (track: Track) => {
-    if (!track) return;
-    enqueue(tracks);
-    setCurrent(track);
+  const tracks = home.data?.tracks.length
+    ? home.data.tracks
+    : (trending.data?.tracks ?? []);
+  const shortcuts = (recent.length ? recent : tracks).slice(0, 6);
+  const artists = home.data?.artists.length
+    ? home.data.artists
+    : (trending.data?.artists ?? []);
+  const playlists = home.data?.playlists ?? [];
+  const play = (track: Track, queue = tracks) => {
+    const state = usePlayerStore.getState();
+    state.enqueue(queue.length ? queue : [track]);
+    state.setCurrent(track);
     router.push("/player");
   };
   const refresh = async () => {
     setRefreshing(true);
-    await Promise.all([query.refetch(), trending.refetch()]);
-    setRefreshing(false);
+    try {
+      await Promise.all([home.refetch(), trending.refetch()]);
+    } finally {
+      setRefreshing(false);
+    }
   };
   return (
     <View style={styles.screen}>
+      <View style={styles.header}>
+        <View style={styles.avatar} accessible accessibilityLabel="Nightwave">
+          <Text style={styles.avatarText}>N</Text>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filters}
+        >
+          {(["Tất cả", "Bài hát", "Playlist"] as Filter[]).map((label) => (
+            <Pressable
+              key={label}
+              accessibilityRole="button"
+              accessibilityState={{ selected: filter === label }}
+              onPress={() => setFilter(label)}
+              style={({ pressed }) => [
+                styles.chip,
+                filter === label && styles.chipActive,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  filter === label && styles.chipTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -71,276 +101,335 @@ export default function Home() {
             refreshing={refreshing}
             onRefresh={refresh}
             tintColor={colors.green}
+            colors={[colors.green]}
           />
         }
         contentContainerStyle={styles.content}
       >
-        <MusicCapsule />
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.kicker}>Your daily listening space</Text>
-            <Text style={styles.greeting}>Good evening</Text>
+        {filter !== "Playlist" && shortcuts.length > 0 && (
+          <View style={styles.shortcuts}>
+            {shortcuts.map((track) => (
+              <Pressable
+                key={track.id}
+                onPress={() => play(track, recent.length ? recent : tracks)}
+                accessibilityRole="button"
+                accessibilityLabel={`Phát ${track.title}`}
+                style={({ pressed }) => [
+                  styles.shortcut,
+                  { width: (width - 40) / 2 },
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Cover uri={track.artwork} size={52} />
+                <Text numberOfLines={2} style={styles.shortcutTitle}>
+                  {track.title}
+                </Text>
+                {current?.id === track.id && <View style={styles.playingDot} />}
+              </Pressable>
+            ))}
           </View>
-          <View style={styles.headerActions}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>NW</Text>
-            </View>
-          </View>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-        >
-          <View style={[styles.chip, styles.chipActive]}>
-            <Text style={styles.chipActiveText}>All music</Text>
-          </View>
-          {["Chill", "Focus", "New releases"].map((label) => (
-            <Pressable
-              key={label}
-              onPress={() =>
-                router.push({ pathname: "/search", params: { q: label } })
-              }
-              style={styles.chip}
-            >
-              <Text style={styles.chipText}>{label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <View style={styles.hero}>
-          <View style={styles.heroGlow} />
-          <Text style={styles.heroEyebrow}>THE NIGHTWAVE EDIT</Text>
-          <Text style={styles.heroTitle}>Soundtrack the{`\n`}quiet hours.</Text>
-          <Text style={styles.heroCopy}>
-            Find a new favorite in today's catalog.
-          </Text>
-          <Pressable
-            disabled={!tracks.length}
-            onPress={() => play(tracks[0])}
-            style={styles.heroButton}
-          >
-            <Play size={16} color={colors.ink} fill={colors.ink} />
-            <Text style={styles.heroButtonText}>Play selection</Text>
-          </Pressable>
-        </View>
-        {query.isLoading && <Skeleton />}
-        {query.isError && (
-          <View style={{ paddingVertical: 18 }}>
-            <Text style={{ color: colors.white }}>Catalog unavailable</Text>
-            <Text style={{ color: colors.muted, marginTop: 6 }}>
-              {query.error.message}
+        )}
+        {home.isLoading && !tracks.length && <Skeleton />}
+        {home.isError && !tracks.length && (
+          <View style={styles.message}>
+            <Text style={styles.sectionTitle}>Chưa tải được nhạc</Text>
+            <Text style={styles.secondary}>
+              Kiểm tra kết nối và địa chỉ máy chủ trong Thư viện.
             </Text>
-            <Pressable onPress={() => query.refetch()}>
-              <Text style={{ color: colors.green, marginTop: 12 }}>
-                Try again
-              </Text>
+            <Pressable
+              onPress={refresh}
+              accessibilityRole="button"
+              style={styles.retry}
+            >
+              <Text style={styles.link}>Thử lại</Text>
             </Pressable>
           </View>
         )}
-        <SectionTitle title="Discover tracks" />
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.albumRail}
-        >
-          {tracks.slice(0, 5).map((track, i) => (
-            <Pressable
-              key={track.id}
-              onPress={() => play(track)}
-              style={styles.albumCard}
+        {filter !== "Playlist" && recent.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeading title="Nghe gần đây" />
+            {recent.slice(0, 3).map((track) => (
+              <TrackRow
+                key={track.id}
+                track={track}
+                active={current?.id === track.id}
+                onPress={() => play(track, recent)}
+                onMore={() => showActions(track)}
+              />
+            ))}
+          </View>
+        )}
+        {filter !== "Playlist" && tracks.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeading
+              title={
+                recent.length ? "Thêm một chút hợp gu" : "Bắt đầu nghe nhạc"
+              }
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
             >
-              {track.artwork ? (
-                <Image
-                  source={{ uri: track.artwork }}
-                  style={styles.albumArt}
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.albumArt,
-                    styles.artPlaceholder,
-                    { backgroundColor: i % 2 ? "#273B4D" : "#3C2B45" },
+              {tracks.slice(0, 10).map((track) => (
+                <Pressable
+                  key={track.id}
+                  onPress={() => play(track)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Phát ${track.title}`}
+                  style={({ pressed }) => [
+                    { width: cardWidth },
+                    pressed && styles.pressed,
                   ]}
                 >
-                  <Text style={styles.placeholderLetter}>{track.title[0]}</Text>
-                </View>
-              )}
-              <Text numberOfLines={1} style={styles.albumTitle}>
-                {track.title}
-              </Text>
-              <Text numberOfLines={1} style={styles.albumArtist}>
-                {track.artist}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <View>
-          {query.data?.playlists.slice(0, 4).map((p) => (
-            <Pressable
-              key={p.id}
-              onPress={() =>
-                router.push({
-                  pathname: "/playlist/[id]",
-                  params: { id: p.id },
-                })
-              }
-              style={{ paddingVertical: 12 }}
+                  <Cover uri={track.artwork} size={cardWidth} />
+                  <Text numberOfLines={2} style={styles.cardTitle}>
+                    {track.title}
+                  </Text>
+                  <Text numberOfLines={2} style={styles.cardDescription}>
+                    {track.artist}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        {filter !== "Bài hát" && playlists.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeading title="Một playlist cho hôm nay" />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
             >
-              <Text style={{ color: colors.white, fontWeight: "700" }}>
-                {p.title}
-              </Text>
-              <Text style={{ color: colors.dim }}>Explore playlist</Text>
+              {playlists.slice(0, 10).map((playlist) => (
+                <Pressable
+                  key={playlist.id}
+                  accessibilityRole="button"
+                  onPress={() =>
+                    router.push({
+                      pathname: "/playlist/[id]",
+                      params: { id: playlist.id },
+                    })
+                  }
+                  style={({ pressed }) => [
+                    { width: cardWidth },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Cover uri={playlist.artwork} size={cardWidth} />
+                  <Text numberOfLines={2} style={styles.cardTitle}>
+                    {playlist.title}
+                  </Text>
+                  {!!playlist.description && (
+                    <Text numberOfLines={2} style={styles.cardDescription}>
+                      {playlist.description}
+                    </Text>
+                  )}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        {filter === "Playlist" && !home.isLoading && !playlists.length && (
+          <View style={styles.message}>
+            <Text style={styles.sectionTitle}>Playlist của bạn ở đây</Text>
+            <Text style={styles.secondary}>
+              Mở Thư viện để nghe hoặc tạo playlist riêng.
+            </Text>
+            <Pressable
+              onPress={() => router.push("/library")}
+              style={styles.retry}
+            >
+              <Text style={styles.link}>Mở Thư viện</Text>
             </Pressable>
-          ))}
-        </View>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Popular right now</Text>
-          <Pressable onPress={() => router.push("/search")}>
-            <Text style={styles.seeAll}>Search more</Text>
-          </Pressable>
-        </View>
-        <View>
-          {tracks.slice(0, 6).map((track) => (
-            <TrackRow
-              key={track.id}
-              track={track}
-              active={current?.id === track.id}
-              onPress={() => play(track)}
-              onMore={() => usePlayerStore.getState().toggleFavorite(track)}
-            />
-          ))}
-        </View>
+          </View>
+        )}
+        {filter === "Tất cả" && artists.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeading title="Khám phá nghệ sĩ" />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.rail}
+            >
+              {artists.slice(0, 8).map((artist) => (
+                <Pressable
+                  key={artist.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Nghe ${artist.name}`}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/artist/[alias]",
+                      params: { alias: artist.alias },
+                    })
+                  }
+                  style={({ pressed }) => [
+                    { width: cardWidth },
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Cover uri={artist.artwork} size={cardWidth} round />
+                  <Text
+                    numberOfLines={2}
+                    style={[styles.cardTitle, styles.artistName]}
+                  >
+                    {artist.name}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        {filter !== "Playlist" && tracks.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeading title="Đang được nghe nhiều" />
+            {(trending.data?.tracks.length ? trending.data.tracks : tracks)
+              .slice(0, 6)
+              .map((track) => (
+                <TrackRow
+                  key={track.id}
+                  track={track}
+                  active={current?.id === track.id}
+                  onPress={() => play(track, trending.data?.tracks ?? tracks)}
+                  onMore={() => showActions(track)}
+                />
+              ))}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
-function SectionTitle({ title }: { title: string }) {
+
+function SectionHeading({ title }: { title: string }) {
   return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <ChevronRight size={20} color={colors.dim} />
+    <Text accessibilityRole="header" style={styles.heading}>
+      {title}
+    </Text>
+  );
+}
+function Cover({
+  uri,
+  size,
+  round = false,
+}: {
+  uri: string | null;
+  size: number;
+  round?: boolean;
+}) {
+  const style = {
+    width: size,
+    height: size,
+    borderRadius: round ? size / 2 : 5,
+  };
+  return uri ? (
+    <Image source={{ uri }} style={style} contentFit="cover" transition={180} />
+  ) : (
+    <View style={[style, styles.coverBlank]}>
+      <Music2 size={Math.min(32, size / 2)} color={colors.muted} />
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink },
-  content: { paddingHorizontal: spacing.lg, paddingBottom: 30 },
   header: {
-    paddingTop: 24,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-  },
-  kicker: { color: colors.dim, fontSize: 12, marginBottom: 6 },
-  greeting: {
-    color: colors.white,
-    fontSize: 27,
-    letterSpacing: -0.7,
-    fontWeight: "700",
-  },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 12 },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
+    gap: 12,
+    paddingLeft: 16,
+    paddingVertical: 16,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.mint,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#C2A4D8",
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: colors.ink, fontWeight: "800", fontSize: 11 },
-  chips: { gap: 9, paddingVertical: 24 },
+  avatarText: { fontSize: 21, fontWeight: "800", color: colors.ink },
+  filters: { gap: 8, paddingRight: 16 },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: radii.pill,
-    backgroundColor: colors.surface,
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    backgroundColor: colors.elevated,
   },
   chipActive: { backgroundColor: colors.green },
-  chipText: { color: colors.muted, fontWeight: "600", fontSize: 13 },
-  chipActiveText: { color: colors.ink, fontWeight: "800", fontSize: 13 },
-  hero: {
-    height: 212,
-    borderRadius: 24,
-    padding: 22,
+  chipText: { fontSize: 14, fontWeight: "600", color: colors.white },
+  chipTextActive: { color: colors.ink },
+  content: { paddingTop: 4, paddingBottom: 24 },
+  shortcuts: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 30,
+  },
+  shortcut: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.elevated,
+    borderRadius: 5,
     overflow: "hidden",
-    backgroundColor: "#173125",
-    marginBottom: 28,
+    minHeight: 60,
+    paddingRight: 8,
+    gap: 9,
   },
-  heroGlow: {
-    position: "absolute",
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    right: -50,
-    top: -90,
-    backgroundColor: "#2B8A58",
-    opacity: 0.35,
-  },
-  heroEyebrow: {
-    color: colors.mint,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.6,
-  },
-  heroTitle: {
+  shortcutTitle: {
     color: colors.white,
-    fontSize: 29,
-    lineHeight: 31,
-    fontWeight: "800",
-    letterSpacing: -1,
-    marginTop: 12,
-  },
-  heroCopy: { color: "#C1D5C5", fontSize: 12, marginTop: 8 },
-  heroButton: {
-    marginTop: 18,
-    alignSelf: "flex-start",
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: colors.mint,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  heroButtonText: { color: colors.ink, fontWeight: "800", fontSize: 12 },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    color: colors.white,
-    fontSize: 19,
+    fontSize: 12,
+    lineHeight: 17,
     fontWeight: "700",
-    letterSpacing: -0.3,
+    flex: 1,
   },
-  seeAll: { color: colors.green, fontWeight: "700", fontSize: 12 },
-  albumRail: { gap: 14, paddingBottom: 30 },
-  albumCard: { width: 138 },
-  albumArt: { width: 138, height: 138, borderRadius: 16, marginBottom: 9 },
-  artPlaceholder: { alignItems: "center", justifyContent: "center" },
-  placeholderLetter: { color: "#ffffff99", fontSize: 46, fontWeight: "800" },
-  albumTitle: { color: colors.white, fontWeight: "700", fontSize: 13 },
-  albumArtist: { color: colors.muted, fontSize: 12, marginTop: 3 },
-  bottom: {
-    height: 72,
-    flexDirection: "row",
-    justifyContent: "space-around",
+  playingDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.green,
+  },
+  section: { marginBottom: 30, paddingHorizontal: 16 },
+  heading: {
+    color: colors.white,
+    fontSize: 23,
+    lineHeight: 29,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+    marginBottom: 16,
+  },
+  sectionTitle: { color: colors.white, fontSize: 21, fontWeight: "700" },
+  rail: { gap: 16, paddingBottom: 2 },
+  cardTitle: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "700",
+    lineHeight: 21,
+    marginTop: 10,
+  },
+  cardDescription: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+  artistName: { textAlign: "center" },
+  coverBlank: {
     alignItems: "center",
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    backgroundColor: colors.ink,
+    justifyContent: "center",
+    backgroundColor: colors.elevated,
   },
-  bottomItem: { padding: 16, minWidth: 80, alignItems: "center" },
-  bottomText: { color: colors.dim, fontSize: 12, fontWeight: "700" },
-  bottomActive: { color: colors.white },
+  message: { marginHorizontal: 16, paddingVertical: 24, gap: 12 },
+  secondary: { color: colors.muted, fontSize: 15, lineHeight: 22 },
+  retry: {
+    minHeight: 48,
+    justifyContent: "center",
+    alignSelf: "flex-start",
+    paddingRight: 16,
+  },
+  link: { color: colors.green, fontSize: 15, fontWeight: "700" },
+  pressed: { opacity: 0.7 },
 });

@@ -1,7 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { Tabs, router } from "expo-router";
-import { Compass, Search, Library } from "lucide-react-native";
+import { House, Search, Library } from "lucide-react-native";
 import { Pressable, Text } from "react-native";
 import { MiniPlayer } from "@/components/music/MiniPlayer";
 import { audioEngine } from "@/services/audio/engine";
@@ -19,35 +19,45 @@ export default function TabLayout() {
           <View
             style={{
               flexDirection: "row",
-              paddingTop: 10,
+              paddingTop: 6,
               paddingBottom: Math.max(12, props.insets.bottom),
-              borderTopWidth: 1,
-              borderTopColor: colors.line,
             }}
           >
             {props.state.routes.map((route, index) => {
               const selected = props.state.index === index;
-              const Icon =
-                index === 0 ? Compass : index === 1 ? Search : Library;
+              const Icon = index === 0 ? House : index === 1 ? Search : Library;
               return (
                 <Pressable
                   key={route.key}
                   accessibilityRole="tab"
                   accessibilityState={{ selected }}
                   onPress={() => props.navigateToTab(route.key)}
-                  style={{ flex: 1, alignItems: "center", gap: 5 }}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    minHeight: 54,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    gap: 5,
+                    opacity: pressed ? 0.65 : 1,
+                  })}
                 >
                   <Icon
-                    size={22}
-                    color={selected ? colors.green : colors.dim}
+                    size={25}
+                    color={selected ? colors.white : colors.muted}
+                    strokeWidth={selected ? 2.5 : 1.8}
                   />
                   <Text
                     style={{
-                      color: selected ? colors.white : colors.dim,
+                      color: selected ? colors.white : colors.muted,
                       fontSize: 11,
+                      fontWeight: selected ? "700" : "500",
                     }}
                   >
-                    {index === 0 ? "Home" : index === 1 ? "Search" : "Library"}
+                    {index === 0
+                      ? "Trang chủ"
+                      : index === 1
+                        ? "Tìm kiếm"
+                        : "Thư viện"}
                   </Text>
                 </Pressable>
               );
@@ -70,9 +80,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <Compass color={color} size={size} />
-          ),
+          tabBarIcon: ({ color, size }) => <House color={color} size={size} />,
         }}
       />
       <Tabs.Screen

@@ -50,8 +50,12 @@ function TrackRowComponent({
       {onMore ? (
         <Pressable
           accessibilityLabel={"Actions for " + track.title}
-          onPress={() => showActions(track)}
-          hitSlop={10}
+          accessibilityRole="button"
+          onPress={(event) => {
+            event.stopPropagation();
+            showActions(track);
+          }}
+          style={styles.more}
         >
           <MoreVertical size={20} color={colors.muted} />
         </Pressable>
@@ -74,7 +78,13 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   artWrap: { width: 52, height: 52 },
-  art: { width: 52, height: 52, borderRadius: 10 },
+  art: { width: 52, height: 52, borderRadius: 5 },
+  more: {
+    width: 48,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   blank: {
     backgroundColor: colors.elevated,
     alignItems: "center",
@@ -91,7 +101,7 @@ const styles = StyleSheet.create({
   info: { flex: 1, gap: 4 },
   title: { color: colors.white, fontSize: 15, fontWeight: "600" },
   active: { color: colors.green },
-  artist: { color: colors.muted, fontSize: 12 },
+  artist: { color: colors.muted, fontSize: 13 },
   duration: { color: colors.dim, fontSize: 12 },
 });
 

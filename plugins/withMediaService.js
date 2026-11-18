@@ -57,19 +57,39 @@ function patchAudio(projectRoot) {
       "serviceConnection.bindingState == ServiceBindingState.UNBOUND || serviceConnection.bindingState == ServiceBindingState.FAILED)",
     );
   fs.writeFileSync(playable, source);
+  require("./origin-island/patchAudio")(base);
 }
 module.exports = (config) => {
   config = withAndroidManifest(config, (c) => {
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(c.modResults);
-    const service = app.service?.find(
+    let service = app.service?.find(
       (s) =>
         s.$["android:name"] ===
         "expo.modules.audio.service.AudioControlsService",
     );
-    if (!service)
-      throw new Error(
-        "Enable expo-audio background playback before media service plugin",
-      );
+    // Manifest mods may run before expo-audio on a clean prebuild. Seed the
+    // same service; expo-audio preserves existing entries rather than duplicating.
+    if (!service) {
+      service = {
+        $: {
+          "android:name": "expo.modules.audio.service.AudioControlsService",
+          "android:exported": "true",
+          "android:foregroundServiceType": "mediaPlayback",
+        },
+        "intent-filter": [
+          {
+            action: [
+              {
+                $: {
+                  "android:name": "androidx.media3.session.MediaSessionService",
+                },
+              },
+            ],
+          },
+        ],
+      };
+      (app.service ||= []).push(service);
+    }
     service.$["android:exported"] = "true";
     return c;
   });

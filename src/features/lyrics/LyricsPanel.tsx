@@ -13,7 +13,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { LinearGradient } from "expo-linear-gradient";
 import { ChevronDown, Maximize2, LocateFixed } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +21,8 @@ import { audioEngine } from "@/services/audio/engine";
 import { usePlayerStore } from "@/stores/player";
 import { useActiveMotion } from "@/hooks/useActiveMotion";
 import { colors } from "@/theme/tokens";
+import { useArtworkTheme } from "@/hooks/useArtworkTheme";
+import { ArtworkBackdrop } from "@/components/music/ArtworkBackdrop";
 import { activeLyricIndex, LyricLine } from "./model";
 const Line = memo(function Line({
   line,
@@ -67,17 +68,18 @@ const Line = memo(function Line({
 export function LyricsPanel() {
   const track = usePlayerStore((s) => s.current);
   const [expanded, setExpanded] = useState(false);
+  const theme = useArtworkTheme(track?.artwork);
   if (!track) return null;
   return (
     <>
-      <View style={styles.compact}>
+      <View style={[styles.compact, { backgroundColor: theme.top }]}>
         <Pressable
           accessibilityLabel="Expand lyrics"
           onPress={() => setExpanded(true)}
           style={styles.heading}
         >
           <Text style={styles.label}>Lyrics</Text>
-          <Maximize2 color={colors.mint} size={18} />
+          <Maximize2 color={theme.accent} size={18} />
         </Pressable>
         <LyricsBody
           key={track.id + "-compact"}
@@ -99,10 +101,15 @@ function FullLyrics({ onClose }: { onClose: () => void }) {
   const insets = useSafeAreaInsets();
   const track = usePlayerStore((s) => s.current);
   return (
-    <LinearGradient
-      colors={["#214E35", "#101D15", colors.ink]}
-      style={{ flex: 1, paddingTop: insets.top, paddingBottom: insets.bottom }}
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.ink,
+        paddingTop: insets.top,
+        paddingBottom: insets.bottom,
+      }}
     >
+      <ArtworkBackdrop uri={track?.artwork} />
       <View style={styles.heading}>
         <View style={{ flex: 1 }}>
           <Text style={styles.label} numberOfLines={1}>
@@ -117,7 +124,7 @@ function FullLyrics({ onClose }: { onClose: () => void }) {
         </Pressable>
       </View>
       {track && <LyricsBody key={track.id + "-full"} id={track.id} expanded />}
-    </LinearGradient>
+    </View>
   );
 }
 function LyricsBody({ id, expanded }: { id: string; expanded: boolean }) {

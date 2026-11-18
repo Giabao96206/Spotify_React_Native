@@ -104,7 +104,10 @@ class FakePlaylist {
     this.metadata = metadata;
     this.metadataUpdates = (this.metadataUpdates || 0) + 1;
   }
-  clearLockScreenControls() {}
+  clearLockScreenControls() {
+    this.metadata = null;
+    this.controlsCleared = (this.controlsCleared || 0) + 1;
+  }
   destroy() {
     this.destroyed = true;
   }
@@ -120,11 +123,24 @@ engineCode = engineCode.replace(
   "const { createAudioPlaylist, setAudioModeAsync } = globalThis.__audio; type AudioPlaylist = any;",
 );
 engineCode = engineCode
+  .replace(
+    /import \{ originIsland \} from [^;]+;/,
+    "const originIsland = globalThis.__island;",
+  )
   .replace(/import \{ api \} from [^;]+;/, "const api = globalThis.__api;")
   .replace(
     /import \{ usePlayerStore \} from [^;]+;/,
     "const usePlayerStore = globalThis.__testStore;",
   );
+globalThis.__island = {
+  queue: [],
+  setQueueMetadata(queue) {
+    this.queue = queue;
+  },
+  clearQueueMetadata() {
+    this.queue = [];
+  },
+};
 const { audioEngine: engine } = await importJs(compile(engineCode));
 const flush = async () => {
   for (let i = 0; i < 20; i++)
@@ -171,6 +187,18 @@ await engine.seek(65);
 assert.equal(instances[0].currentTime, 65);
 engine.toggle();
 assert.equal(instances[0].playing, false);
+assert.equal(globalThis.__island.queue[1].title, "b");
+store.getState().setCurrent(null);
+assert.equal(
+  instances[0].playing,
+  false,
+  "clearing selection stops native playback",
+);
+assert.equal(instances[0].sources.length, 0);
+assert.equal(globalThis.__island.queue.length, 0);
+assert.equal(store.getState().status, "idle");
+assert.equal(instances[0].metadata, null);
+assert.ok(instances[0].controlsCleared > 0);
 cleanup();
 assert.equal(instances[0].destroyed, true);
 // Selection changed while URL resolution was pending: stale source must never win.
@@ -192,6 +220,24 @@ await flush();
 assert.equal(instances[1].sources[0].uri, "https://audio.test/b");
 assert.equal(store.getState().current.id, "b");
 cleanup();
+// Stop while stream resolution is pending must invalidate the eventual result.
+let releaseStopped;
+globalThis.__api.stream = () =>
+  new Promise((resolve) => {
+    releaseStopped = resolve;
+  });
+store.getState().enqueue([a]);
+store.getState().setCurrent(a);
+cleanup = engine.start();
+engine.stop();
+releaseStopped("https://audio.test/stopped");
+await flush();
+assert.equal(instances[2].sources.length, 0);
+assert.equal(instances[2].playing, false);
+assert.equal(instances[2].metadata, null);
+assert.equal(globalThis.__island.queue.length, 0);
+assert.equal(store.getState().status, "idle");
+cleanup();
 console.log(
-  "PASS: single instance, silent restore, transport, metadata, seek, pause, cleanup, stale URL race.",
+  "PASS: single instance, silent restore, transport, metadata, seek, pause, stop, cleanup, stale URL and stopped-load races.",
 );

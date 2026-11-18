@@ -1,7 +1,6 @@
 import { LyricsPanel } from "@/features/lyrics/LyricsPanel";
 import React, { useState } from "react";
 import {
-  Image,
   ScrollView,
   Pressable,
   StyleSheet,
@@ -20,17 +19,16 @@ import {
   SkipBack,
   SkipForward,
 } from "lucide-react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useActiveMotion } from "@/hooks/useActiveMotion";
 import Slider from "@react-native-community/slider";
 import { router } from "expo-router";
-import { useQuery } from "@tanstack/react-query";
 import { FloatingArtwork } from "@/components/music/FloatingArtwork";
 import { colors } from "@/theme/tokens";
-import { api } from "@/services/api/client";
 import { audioEngine } from "@/services/audio/engine";
 import { usePlayerStore } from "@/stores/player";
+import { ArtworkBackdrop } from "@/components/music/ArtworkBackdrop";
+import { useArtworkTheme } from "@/hooks/useArtworkTheme";
 export default function Player() {
   const current = usePlayerStore((s) => s.current);
   const playing = usePlayerStore((s) => s.isPlaying);
@@ -41,8 +39,8 @@ export default function Player() {
   const shuffle = usePlayerStore((s) => s.shuffle);
   const repeat = usePlayerStore((s) => s.repeat);
   const motion = useActiveMotion();
-  const [lyricsVisible, setLyricsVisible] = useState(false);
   const { width, height } = useWindowDimensions();
+  const theme = useArtworkTheme(current?.artwork);
   if (!current)
     return (
       <View style={styles.screen}>
@@ -60,20 +58,8 @@ export default function Player() {
   const size = Math.min(width - 48, height * 0.37, 400);
   const liked = favorites.some((t) => t.id === current.id);
   return (
-    <LinearGradient
-      colors={["#183E2A", "#101A14", colors.ink]}
-      style={styles.screen}
-    >
-      {current.artwork && (
-        <Image
-          source={{ uri: current.artwork }}
-          blurRadius={80}
-          style={[
-            { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
-            { opacity: 0.22 },
-          ]}
-        />
-      )}
+    <View style={styles.screen}>
+      <ArtworkBackdrop uri={current.artwork} />
       <ScrollView
         style={styles.safe}
         contentContainerStyle={{ paddingBottom: 36 }}
@@ -82,13 +68,15 @@ export default function Player() {
         <View style={styles.top}>
           <Pressable
             accessibilityLabel="Close player"
+            style={styles.iconButton}
             onPress={() => router.back()}
           >
             <ArrowDown size={25} color={colors.white} />
           </Pressable>
-          <Text style={styles.now}>NOW PLAYING</Text>
+          <Text style={styles.now}>Đang phát</Text>
           <Pressable
             accessibilityLabel="Open queue"
+            style={styles.iconButton}
             onPress={() => router.push("/queue")}
           >
             <ListMusic size={23} color={colors.white} />
@@ -112,12 +100,13 @@ export default function Player() {
           </View>
           <Pressable
             accessibilityLabel={liked ? "Unlike song" : "Like song"}
+            style={styles.iconButton}
             onPress={() => usePlayerStore.getState().toggleFavorite(current)}
           >
             <Heart
               size={25}
-              color={liked ? colors.green : colors.white}
-              fill={liked ? colors.green : "transparent"}
+              color={liked ? theme.accent : colors.white}
+              fill={liked ? theme.accent : "transparent"}
             />
           </Pressable>
         </View>
@@ -125,12 +114,15 @@ export default function Player() {
         <View style={styles.controls}>
           <Pressable
             accessibilityLabel="Toggle shuffle"
+            accessibilityState={{ selected: shuffle }}
+            style={styles.iconButton}
             onPress={usePlayerStore.getState().toggleShuffle}
           >
-            <Shuffle size={20} color={shuffle ? colors.green : colors.white} />
+            <Shuffle size={20} color={shuffle ? theme.accent : colors.white} />
           </Pressable>
           <Pressable
             accessibilityLabel="Previous track"
+            style={styles.iconButton}
             onPress={audioEngine.previous}
           >
             <SkipBack size={27} color={colors.white} fill={colors.white} />
@@ -146,21 +138,27 @@ export default function Player() {
               <Play size={25} color={colors.ink} fill={colors.ink} />
             )}
           </Pressable>
-          <Pressable accessibilityLabel="Next track" onPress={audioEngine.next}>
+          <Pressable
+            accessibilityLabel="Next track"
+            onPress={audioEngine.next}
+            style={styles.iconButton}
+          >
             <SkipForward size={27} color={colors.white} fill={colors.white} />
           </Pressable>
           <Pressable
             accessibilityLabel={"Repeat " + repeat}
+            accessibilityState={{ selected: repeat !== "off" }}
+            style={styles.iconButton}
             onPress={usePlayerStore.getState().cycleRepeat}
           >
             <Repeat
               size={20}
-              color={repeat !== "off" ? colors.green : colors.white}
+              color={repeat !== "off" ? theme.accent : colors.white}
             />
             {repeat === "one" && (
               <Text
                 style={{
-                  color: colors.green,
+                  color: theme.accent,
                   fontSize: 9,
                   textAlign: "center",
                 }}
@@ -181,13 +179,15 @@ export default function Player() {
         </Text>
         <LyricsPanel />
       </ScrollView>
-    </LinearGradient>
+    </View>
   );
 }
 function Progress() {
   const position = usePlayerStore((s) => s.position);
   const duration = usePlayerStore((s) => s.duration);
   const [drag, setDrag] = useState<number | null>(null);
+  const current = usePlayerStore((s) => s.current);
+  const theme = useArtworkTheme(current?.artwork);
   return (
     <View style={{ marginTop: 22 }}>
       <Slider
@@ -195,7 +195,7 @@ function Progress() {
         minimumValue={0}
         maximumValue={duration || 1}
         value={drag ?? position}
-        minimumTrackTintColor={colors.green}
+        minimumTrackTintColor={theme.accent}
         maximumTrackTintColor="#ffffff30"
         thumbTintColor={colors.white}
         onSlidingStart={setDrag}
@@ -229,11 +229,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
+  iconButton: {
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   now: {
-    color: colors.muted,
-    fontSize: 10,
-    letterSpacing: 1.8,
-    fontWeight: "800",
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: "700",
   },
   artWrap: { alignItems: "center", marginTop: 48, marginBottom: 42 },
   art: { width: 320, height: 320, borderRadius: 18 },
@@ -250,7 +255,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: -0.7,
   },
-  artist: { color: colors.muted, fontSize: 15, marginTop: 6 },
+  artist: { color: "#ffffffcf", fontSize: 16, marginTop: 7 },
   slider: {
     height: 4,
     backgroundColor: "#ffffff24",
@@ -259,7 +264,7 @@ const styles = StyleSheet.create({
   },
   sliderFill: { height: 4, backgroundColor: colors.white, borderRadius: 4 },
   time: { flexDirection: "row", justifyContent: "space-between", marginTop: 9 },
-  timeText: { color: colors.dim, fontSize: 11 },
+  timeText: { color: "#ffffffcf", fontSize: 12 },
   controls: {
     flexDirection: "row",
     alignItems: "center",
